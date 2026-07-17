@@ -1,5 +1,5 @@
 class Nextmv < Formula
-  desc "The all-purpose Python SDK for Nextmv"
+  desc "The Nextmv CLI allows you to manage and deploy decision models and interact with them."
   homepage "https://www.nextmv.io"
   version "1.9.6"
   license "Apache-2.0"
