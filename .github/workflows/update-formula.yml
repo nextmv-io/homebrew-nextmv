@@ -1,0 +1,138 @@
+name: update-formula
+run-name: Update nextmv formula to ${{ github.event.client_payload.version || inputs.version }}
+
+# Updates Formula/nextmv.rb to a new nextmv CLI release.
+#
+# The nextmv CLI is released from the (public) nextmv-io/nextmv-py repo.
+# nextmv-py's release.yml sends a `repository_dispatch` to THIS repo for
+# stable (non-prerelease) CLI releases only.
+#
+# `workflow_dispatch` is a manual escape hatch to (re)build the formula for a
+# specific version.
+on:
+  repository_dispatch:
+    types: [nextmv-cli-release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to build (e.g. nextmv-v1.10.0, v1.10.0, or 1.10.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write # required to commit and push the updated formula
+
+jobs:
+  update-formula:
+    name: Update nextmv formula
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout tap repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: resolve version
+        id: version
+        shell: bash
+        env:
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          INPUTS_VERSION: ${{ inputs.version }}
+        run: |
+          RAW="${DISPATCH_VERSION:-$INPUTS_VERSION}"
+          VERSION="${RAW#nextmv-}" # strip 'nextmv-' prefix if present
+          VERSION="${VERSION#v}"   # strip leading 'v' if present
+          if [ -z "$VERSION" ]; then
+            echo "::error::No version provided" && exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"
+
+      - name: compute sha256 checksums
+        id: sha
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          BASE_URL="https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v${VERSION}"
+
+          checksum() {
+            local asset="$1"
+            local sum
+            sum=$(curl -fsSL "$BASE_URL/$asset" | sha256sum | cut -d ' ' -f 1)
+            if [ -z "$sum" ]; then
+              echo "::error::Failed to download or checksum $asset" && exit 1
+            fi
+            echo "$sum"
+          }
+
+          {
+            echo "macos_arm=$(checksum nextmv-macos-arm64.zip)"
+            echo "macos_x64=$(checksum nextmv-macos-x64.zip)"
+            echo "linux_arm=$(checksum nextmv-linux-arm64.zip)"
+            echo "linux_x64=$(checksum nextmv-linux-x64.zip)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: render formula
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          MACOS_ARM_SHA256: ${{ steps.sha.outputs.macos_arm }}
+          MACOS_X64_SHA256: ${{ steps.sha.outputs.macos_x64 }}
+          LINUX_ARM_SHA256: ${{ steps.sha.outputs.linux_arm }}
+          LINUX_X64_SHA256: ${{ steps.sha.outputs.linux_x64 }}
+        run: |
+          cat > Formula/nextmv.rb <<EOF
+          class Nextmv < Formula
+            desc "The Nextmv CLI allows you to manage and deploy decision models and interact with them."
+            homepage "https://www.nextmv.io"
+            version "${VERSION}"
+            license "Apache-2.0"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-macos-arm64.zip"
+                sha256 "${MACOS_ARM_SHA256}"
+              else
+                url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-macos-x64.zip"
+                sha256 "${MACOS_X64_SHA256}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-linux-arm64.zip"
+                sha256 "${LINUX_ARM_SHA256}"
+              else
+                url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-linux-x64.zip"
+                sha256 "${LINUX_X64_SHA256}"
+              end
+            end
+
+            def install
+              libexec.install Dir["*"]
+              bin.install_symlink libexec/"nextmv"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/nextmv --version")
+            end
+          end
+          EOF
+
+          echo "Rendered formula:"
+          cat Formula/nextmv.rb
+
+      - name: commit and push
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "nextmvbot"
+          git config user.email "support@nextmv.io"
+          if git diff --quiet -- Formula/nextmv.rb; then
+            echo "Formula already at ${VERSION}; nothing to commit."
+            exit 0
+          fi
+          git add Formula/nextmv.rb
+          git commit -m "nextmv ${VERSION}"
+          git push
