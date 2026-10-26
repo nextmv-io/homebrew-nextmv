@@ -1,26 +1,23 @@
 class Nextmv < Formula
   desc "The Nextmv CLI allows you to manage and deploy decision models and interact with them."
   homepage "https://www.nextmv.io"
-  version "1.12.0"
+  version "1.13.0"
   license "Apache-2.0"
 
+  # Only Apple silicon is supported on macOS; there is no Intel macOS binary.
   on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-macos-arm64.zip"
-      sha256 "9ea20f3e7c81e918c6edf7dbb74ed23b990339c0e537fdc0e844b337db76970f"
-    else
-      url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-macos-x64.zip"
-      sha256 "6bd6029cf21dd639274813907b64ade1c8868eedfa241f12c0d5b3a184705837"
-    end
+    depends_on arch: :arm64
+    url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-macos-arm64.zip"
+    sha256 "74cb7d2252d277620f7f24b7470137b44f39b5ca3b567cebad8872d58c84e408"
   end
 
   on_linux do
     if Hardware::CPU.arm?
       url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-linux-arm64.zip"
-      sha256 "59747a708f9e1f6efe979902503f356e5d082624331670fb27f5fc4ef3a27ca3"
+      sha256 "79c8811de3e2e749da42fe2de0a7e0f10b98d17cca9827ac77cf65592dc244b2"
     else
       url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-linux-x64.zip"
-      sha256 "16ff3ef110975d211f29819c0c2834c1af9fdd63dfd71361e8fb8befb7ed06e0"
+      sha256 "44d39173196c766d03aba88be0b627a76d6a66c3ec9e1a8734d2d591ddf9c724"
     end
   end
 
