@@ -67,7 +67,6 @@ jobs:
 
           {
             echo "macos_arm=$(checksum nextmv-macos-arm64.zip)"
-            echo "macos_x64=$(checksum nextmv-macos-x64.zip)"
             echo "linux_arm=$(checksum nextmv-linux-arm64.zip)"
             echo "linux_x64=$(checksum nextmv-linux-x64.zip)"
           } >> "$GITHUB_OUTPUT"
@@ -77,7 +76,6 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
           MACOS_ARM_SHA256: ${{ steps.sha.outputs.macos_arm }}
-          MACOS_X64_SHA256: ${{ steps.sha.outputs.macos_x64 }}
           LINUX_ARM_SHA256: ${{ steps.sha.outputs.linux_arm }}
           LINUX_X64_SHA256: ${{ steps.sha.outputs.linux_x64 }}
         run: |
@@ -88,14 +86,11 @@ jobs:
             version "${VERSION}"
             license "Apache-2.0"
 
+            # Only Apple silicon is supported on macOS; there is no Intel macOS binary.
             on_macos do
-              if Hardware::CPU.arm?
-                url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-macos-arm64.zip"
-                sha256 "${MACOS_ARM_SHA256}"
-              else
-                url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-macos-x64.zip"
-                sha256 "${MACOS_X64_SHA256}"
-              end
+              depends_on arch: :arm64
+              url "https://github.com/nextmv-io/nextmv-py/releases/download/nextmv-v#{version}/nextmv-macos-arm64.zip"
+              sha256 "${MACOS_ARM_SHA256}"
             end
 
             on_linux do
